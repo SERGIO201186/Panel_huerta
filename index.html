@@ -392,13 +392,64 @@ function Dashboard() {
     return null;
   }
 
+  function pick_(obj, candidates) {
+    for (const c of candidates) if (obj[c] !== undefined && obj[c] !== null) return obj[c];
+    const lower = {};
+    Object.keys(obj).forEach(k => { lower[k.toLowerCase()] = obj[k]; });
+    for (const c of candidates) {
+      const v = lower[c.toLowerCase()];
+      if (v !== undefined && v !== null) return v;
+    }
+    return undefined;
+  }
+
+  function normalizeOds_(arr) {
+    return arr.map(item => {
+      const total = Number(pick_(item, ["totalGeneral", "TOTAL", "PRECIO_TOTAL", "total"]) || 0);
+      const restante = Number(pick_(item, ["restante", "RESTANTE", "SALDO"]) || 0);
+      return {
+        folio: pick_(item, ["folio", "FOLIO"]) || "",
+        finado: pick_(item, ["fallecido", "FALLECIDO", "FINADO", "TITULAR", "finado"]) || "",
+        contratante: pick_(item, ["contratante", "CONTRATANTE"]) || "",
+        total,
+        restante,
+        estatus: (pick_(item, ["estatus", "ESTATUS", "ESTADO_MANUAL"]) || (restante <= 0 ? "LIQUIDADO" : "PENDIENTE")) || "",
+      };
+    });
+  }
+
+  function normalizePrevision_(arr) {
+    return arr.map(item => {
+      const total = Number(pick_(item, ["PRECIO_TOTAL", "precioTotal", "TOTAL", "total"]) || 0);
+      const abonado = Number(pick_(item, ["PAGADO_A_LA_FECHA", "ABONADO", "abonado"]) || 0);
+      let estatus = pick_(item, ["ESTADO_MANUAL", "ESTATUS", "estatus"]) || "";
+      if (!estatus) estatus = total > 0 && abonado >= total ? "LIQUIDADO" : "VIGENTE";
+      return {
+        folio: pick_(item, ["FOLIO", "folio"]) || "",
+        titular: pick_(item, ["TITULAR", "titular"]) || "",
+        asesor: pick_(item, ["ASESOR", "asesor"]) || "",
+        total, abonado,
+        estatus: String(estatus).toUpperCase(),
+      };
+    });
+  }
+
   async function probarConexion(tipo, urlOverride) {
     const url = urlOverride || (tipo === "ods" ? config.odsUrl : config.previsionUrl);
     if (!url) return;
     const setStatus = tipo === "ods" ? setOdsStatus : setPrevisionStatus;
     setStatus({ state: "loading" });
     try {
-      const res = await fetch(url);
+      let res;
+      if (tipo === "ods") {
+        res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ accion: "obtenerODS", filtros: {} }),
+        });
+      } else {
+        res = await fetch(url);
+      }
       if (!res.ok) throw new Error("HTTP " + res.status);
       const raw = await res.json();
       const arr = extractArray_(raw);
@@ -406,9 +457,10 @@ function Dashboard() {
         setStatus({ state: "error", message: "Conectó, pero el JSON no es una lista reconocible. Revisa el formato que devuelve tu script." });
         return;
       }
-      setStatus({ state: "ok", count: arr.length });
-      if (tipo === "ods") { setOdsData(arr); setIsDemoOds(false); }
-      if (tipo === "prevision") { setPrevisionData(arr); setIsDemoPrevision(false); }
+      const normalized = tipo === "ods" ? normalizeOds_(arr) : normalizePrevision_(arr);
+      setStatus({ state: "ok", count: normalized.length });
+      if (tipo === "ods") { setOdsData(normalized); setIsDemoOds(false); }
+      if (tipo === "prevision") { setPrevisionData(normalized); setIsDemoPrevision(false); }
     } catch (err) {
       setStatus({ state: "error", message: err.message });
     }
