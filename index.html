@@ -13,21 +13,35 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
-<script src="https://unpkg.com/react-is@18/umd/react-is.production.min.js"></script>
-<script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+<script src="https://unpkg.com/react-is@18.3.1/umd/react-is.production.min.js"></script>
+<script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"></script>
 <style>
   html,body{ margin:0; padding:0; background:#0A0F1C; }
   ::selection{ background:#BB9056; color:#1A1306; }
   input:focus, select:focus{ box-shadow:0 0 0 2px #BB905655; }
   @media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; } }
 </style>
+<script>
+  window.addEventListener('error', function (e) {
+    var root = document.getElementById('root');
+    if (root) {
+      root.innerHTML = '<div style="background:#1a0a0a;color:#ffb3a0;padding:20px;font-family:monospace;font-size:13px;white-space:pre-wrap;min-height:100vh;box-sizing:border-box;">'
+        + '⚠ ERROR AL CARGAR EL PANEL\n\n'
+        + 'Mensaje: ' + (e.message || 'desconocido') + '\n'
+        + 'Archivo: ' + (e.filename || '-') + '\n'
+        + 'Línea: ' + (e.lineno || '-') + '\n\n'
+        + 'Copia este texto completo y envíalo para corregirlo.'
+        + '</div>';
+    }
+  });
+</script>
 </head>
 <body>
-<div id="root"></div>
+<div id="root" style="background:#0A0F1C;color:#8B93AC;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:sans-serif;font-size:14px;">Cargando panel…</div>
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useMemo } = React;
