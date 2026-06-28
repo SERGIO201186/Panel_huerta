@@ -83,6 +83,9 @@ const Flame = mkIcon(<><path d="M12 22a6 6 0 006-6c0-3-2-5-3-7-1 1.5-2 2.5-2 4a3
 const Wrench = mkIcon(<><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94z"/></>);
 const Fuel = mkIcon(<><line x1="3" y1="22" x2="15" y2="22"/><line x1="4" y1="9" x2="14" y2="9"/><path d="M14 22V4a2 2 0 00-2-2H6a2 2 0 00-2 2v18"/><path d="M14 13h2a2 2 0 012 2v2a2 2 0 002 2"/><circle cx="18" cy="9" r="1.5"/></>);
 const ShieldCheck = mkIcon(<><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></>);
+const Package = mkIcon(<><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></>);
+const Gauge = mkIcon(<><path d="M12 3a9 9 0 100 18 9 9 0 000-18z"/><path d="M12 12l4-4"/><path d="M12 8v0"/></>);
+const Edit3 = mkIcon(<><path d="M17 3a2.85 2.85 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></>);
 
 /* ============ TEMA ============ */
 const T = {
@@ -100,29 +103,9 @@ const fmtDate = (d) => { if (!d) return "—"; try { return new Date(d).toLocale
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
 /* ============ DATOS SEMILLA ============ */
-const SEED_EMPLEADOS = [
-  { id: uid(), nombre: "Rocío Hernández", puesto: "ADMINISTRADOR GENERAL", fechaIngreso: "2022-03-01", salario: 9500, telefono: "2281234567", estatus: "ACTIVO" },
-  { id: uid(), nombre: "Marco Tadeo", puesto: "CHOFER / LOGÍSTICA", fechaIngreso: "2023-06-10", salario: 7200, telefono: "2287654321", estatus: "ACTIVO" },
-  { id: uid(), nombre: "Itzel Romero", puesto: "VENDEDOR / ATENCIÓN", fechaIngreso: "2024-01-15", salario: 6800, telefono: "2289998877", estatus: "ACTIVO" },
-];
-const SEED_GASTOS = [
-  { id: uid(), fecha: "2026-06-18", categoria: "Cafetería / Atención", descripcion: "Café y galletas para sala de velación", monto: 380, responsable: "Rocío Hernández" },
-  { id: uid(), fecha: "2026-06-19", categoria: "Papelería", descripcion: "Hojas y tóner impresora", monto: 540, responsable: "Itzel Romero" },
-  { id: uid(), fecha: "2026-06-20", categoria: "Limpieza", descripcion: "Insumos de limpieza sala Galama", monto: 290, responsable: "Marco Tadeo" },
-  { id: uid(), fecha: "2026-06-21", categoria: "Propinas / Apoyos", descripcion: "Apoyo a cargadores servicio externo", monto: 600, responsable: "Marco Tadeo" },
-];
-const SEED_VEHICULOS = [
-  { id: uid(), nombre: "Carroza Principal", placas: "YXA-112-A", tipo: "Carroza", kmActual: 88400,
-    gastos: [
-      { id: uid(), fecha: "2026-06-10", tipo: "Combustible", monto: 850, nota: "Tanque lleno" },
-      { id: uid(), fecha: "2026-06-15", tipo: "Mantenimiento", monto: 1200, nota: "Cambio de aceite y filtros" },
-    ] },
-  { id: uid(), nombre: "Van de Traslado", placas: "YXB-220-C", tipo: "Van", kmActual: 142300,
-    gastos: [
-      { id: uid(), fecha: "2026-06-12", tipo: "Combustible", monto: 620, nota: "Traslado foráneo Coatepec" },
-      { id: uid(), fecha: "2026-06-17", tipo: "Verificación", monto: 480, nota: "Verificación vehicular semestral" },
-    ] },
-];
+const SEED_EMPLEADOS = [];
+const SEED_GASTOS = [];
+const SEED_VEHICULOS = [];
 const SEED_VENTAS_MES = [
   { mes: "Ene", inmediato: 142000, prevision: 38000, gastos: 96000 },
   { mes: "Feb", inmediato: 128000, prevision: 41000, gastos: 89000 },
@@ -286,6 +269,8 @@ const NAV = [
   { id: "rh", label: "Empleados / RH", icon: Users },
   { id: "hormiga", label: "Gastos Hormiga", icon: Receipt },
   { id: "vehiculos", label: "Vehículos", icon: Truck },
+  { id: "proveedores", label: "Proveedores (Ataúdes/Urnas)", icon: Package },
+  { id: "rentabilidad", label: "Rentabilidad", icon: Gauge },
   { id: "conexion", label: "Conexión de Apps", icon: Link2 },
 ];
 
@@ -332,7 +317,7 @@ function Dashboard() {
       setVehiculos(veh);
       setConfig(cfg);
       setLoaded(true);
-      if (cfg.odsUrl) probarConexion("ods", cfg.odsUrl);
+      if (cfg.odsUrl) { probarConexion("ods", cfg.odsUrl); cargarProductos(cfg.odsUrl); }
       if (cfg.previsionUrl) probarConexion("prevision", cfg.previsionUrl);
     })();
   }, []);
@@ -340,6 +325,110 @@ function Dashboard() {
   useEffect(() => { if (loaded) saveKey("gastos-hormiga", gastos); }, [gastos, loaded]);
   useEffect(() => { if (loaded) saveKey("vehiculos", vehiculos); }, [vehiculos, loaded]);
   useEffect(() => { if (loaded) saveKey("integracion-config", config); }, [config, loaded]);
+
+  const [empleadosStatus, setEmpleadosStatus] = useState({ state: "idle" });
+  const [productos, setProductos] = useState([]);
+  const [productosStatus, setProductosStatus] = useState({ state: "idle" });
+
+  async function cargarProductos(urlOverride) {
+    const url = urlOverride || config.odsUrl;
+    if (!url) { setProductosStatus({ state: "error", message: "Conecta primero la URL de ODS en Conexión de Apps" }); return; }
+    setProductosStatus({ state: "loading" });
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ accion: "obtenerProductos", filtros: {} }),
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const raw = await res.json();
+      const arr = extractArray_(raw);
+      if (!arr) {
+        setProductosStatus({ state: "error", message: 'Tu Apps Script todavía no tiene la acción "obtenerProductos". Pega el código que te indico más abajo.' });
+        return;
+      }
+      setProductos(arr);
+      setProductosStatus({ state: "ok", count: arr.length });
+    } catch (err) {
+      setProductosStatus({ state: "error", message: err.message });
+    }
+  }
+
+  async function guardarProductoRemoto(datos) {
+    if (!config.odsUrl) throw new Error("No hay URL de ODS conectada");
+    const res = await fetch(config.odsUrl, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ accion: "guardarProducto", datos }),
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return res.json();
+  }
+
+  async function eliminarProductoRemoto(id) {
+    if (!config.odsUrl) throw new Error("No hay URL de ODS conectada");
+    const res = await fetch(config.odsUrl, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ accion: "eliminarProducto", id }),
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return res.json();
+  }
+
+  async function importarColaboradores(urlOverride) {
+    const url = urlOverride || config.odsUrl;
+    if (!url) { setEmpleadosStatus({ state: "error", message: "Primero conecta la URL de ODS en Conexión de Apps" }); return; }
+    setEmpleadosStatus({ state: "loading" });
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ accion: "obtenerColaboradores" }),
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const raw = await res.json();
+      const arr = extractArray_(raw);
+      if (!arr) { setEmpleadosStatus({ state: "error", message: "No se encontró una lista de colaboradores en la respuesta." }); return; }
+      setEmpleados(prev => {
+        const prevById = {};
+        prev.forEach(e => { prevById[e.id] = e; });
+        return arr.map(item => {
+          const id = String(pick_(item, ["idColaborador", "id"]) || uid());
+          const existing = prevById[id];
+          return {
+            id,
+            nombre: pick_(item, ["nombreCompleto", "nombre"]) || (existing ? existing.nombre : ""),
+            puesto: pick_(item, ["puesto"]) || (existing ? existing.puesto : ""),
+            fechaIngreso: pick_(item, ["fechaIngreso"]) || (existing ? existing.fechaIngreso : ""),
+            telefono: pick_(item, ["telefono"]) || (existing ? existing.telefono : ""),
+            domicilio: pick_(item, ["domicilio"]) || (existing ? existing.domicilio : ""),
+            familiarNombre: pick_(item, ["familiarNombre"]) || (existing ? existing.familiarNombre : ""),
+            familiarTelefono: pick_(item, ["familiarTelefono"]) || (existing ? existing.familiarTelefono : ""),
+            nota: pick_(item, ["nota"]) || (existing ? existing.nota : ""),
+            usuario: pick_(item, ["usuario"]) || (existing ? existing.usuario : ""),
+            pin: pick_(item, ["pin"]) || (existing ? existing.pin : ""),
+            estatus: pick_(item, ["estatus"]) || (existing ? existing.estatus : "ACTIVO"),
+            salario: existing ? existing.salario : 0,
+            _remote: item,
+          };
+        });
+      });
+      setEmpleadosStatus({ state: "ok", count: arr.length });
+    } catch (err) {
+      setEmpleadosStatus({ state: "error", message: err.message });
+    }
+  }
+
+  async function crearColaboradorRemoto(url, datos) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ accion: "guardarColaborador", datos }),
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return res.json();
+  }
 
   async function probarNube(url) {
     setCloudStatus({ state: "loading" });
@@ -404,15 +493,29 @@ function Dashboard() {
   }
 
   function normalizeOds_(arr) {
+    const num = (item, keys) => Number(pick_(item, keys) || 0);
     return arr.map(item => {
-      const total = Number(pick_(item, ["totalGeneral", "TOTAL", "PRECIO_TOTAL", "total"]) || 0);
-      const restante = Number(pick_(item, ["restante", "RESTANTE", "SALDO"]) || 0);
+      const total = num(item, ["totalGeneral", "TOTAL", "PRECIO_TOTAL", "total"]);
+      const restante = num(item, ["restante", "RESTANTE", "SALDO"]);
+      const costoAtaud = num(item, ["costoAtaud"]);
+      const costoUrna = num(item, ["costoUrna"]);
+      const costoEmbalsamado = num(item, ["costoEmbalsamado"]);
+      const costoSala = num(item, ["costoSala"]);
+      const costoTraslado = num(item, ["costoTraslado"]);
+      const costoAdicionalCremacion = num(item, ["costoAdicionalCremacion"]);
+      const costoExcesoPeso = num(item, ["costoExcesoPeso"]);
+      const otrosCargos = num(item, ["otrosCargos"]);
+      const costoDirecto = costoAtaud + costoUrna + costoEmbalsamado + costoSala + costoTraslado + costoAdicionalCremacion + costoExcesoPeso + otrosCargos;
       return {
         folio: pick_(item, ["folio", "FOLIO"]) || "",
         finado: pick_(item, ["fallecido", "FALLECIDO", "FINADO", "TITULAR", "finado"]) || "",
         contratante: pick_(item, ["contratante", "CONTRATANTE"]) || "",
+        modalidadServicio: pick_(item, ["modalidadServicio"]) || "",
+        fechaCreacion: pick_(item, ["fechaCreacion"]) || "",
         total,
         restante,
+        costoAtaud, costoUrna, costoEmbalsamado, costoSala, costoTraslado, costoAdicionalCremacion, costoExcesoPeso, otrosCargos,
+        costoDirecto,
         estatus: (pick_(item, ["estatus", "ESTATUS", "ESTADO_MANUAL"]) || (restante <= 0 ? "LIQUIDADO" : "PENDIENTE")) || "",
       };
     });
@@ -516,9 +619,11 @@ function Dashboard() {
           {tab === "finanzas" && <FinanzasTab {...{ totalInmediato, totalPrevisionAbonado, totalNomina, totalGastosHormiga, totalVehiculos, gastosPorCategoria, ingresosMes, gastosOperativosMes, utilidadMes }} />}
           {tab === "inmediato" && <InmediatoTab odsData={odsData} isDemo={isDemoOds} />}
           {tab === "prevision" && <PrevisionTab data={previsionData} isDemo={isDemoPrevision} />}
-          {tab === "rh" && <RHTab empleados={empleados} setEmpleados={setEmpleados} totalNomina={totalNomina} />}
+          {tab === "rh" && <RHTab empleados={empleados} setEmpleados={setEmpleados} totalNomina={totalNomina} odsUrl={config.odsUrl} importarColaboradores={importarColaboradores} empleadosStatus={empleadosStatus} crearColaboradorRemoto={crearColaboradorRemoto} />}
           {tab === "hormiga" && <HormigaTab gastos={gastos} setGastos={setGastos} total={totalGastosHormiga} />}
           {tab === "vehiculos" && <VehiculosTab vehiculos={vehiculos} setVehiculos={setVehiculos} total={totalVehiculos} />}
+          {tab === "proveedores" && <ProveedoresTab productos={productos} odsUrl={config.odsUrl} productosStatus={productosStatus} cargarProductos={cargarProductos} guardarProductoRemoto={guardarProductoRemoto} eliminarProductoRemoto={eliminarProductoRemoto} setProductos={setProductos} />}
+          {tab === "rentabilidad" && <RentabilidadTab odsData={odsData} isDemoOds={isDemoOds} gastosFijosMes={gastosOperativosMes} />}
           {tab === "conexion" && <ConexionTab config={config} setConfig={setConfig} odsStatus={odsStatus} previsionStatus={previsionStatus} probarConexion={probarConexion} cloudUrl={cloudUrl} cloudStatus={cloudStatus} probarNube={probarNube} />}
         </main>
       </div>
@@ -676,15 +781,102 @@ function PrevisionTab({ data, isDemo }) {
   );
 }
 
-function RHTab({ empleados, setEmpleados, totalNomina }) {
-  const [form, setForm] = useState({ nombre: "", puesto: "VENDEDOR / ATENCIÓN", fechaIngreso: "", salario: "", telefono: "", estatus: "ACTIVO" });
-  const add = () => {
+function RHTab({ empleados, setEmpleados, totalNomina, odsUrl, importarColaboradores, empleadosStatus, crearColaboradorRemoto }) {
+  const blank = { nombre: "", puesto: "VENDEDOR / ATENCIÓN", fechaIngreso: "", salario: "", telefono: "", domicilio: "", familiarNombre: "", familiarTelefono: "", usuario: "", contrasena: "", pin: "", nota: "" };
+  const [form, setForm] = useState(blank);
+  const [editingId, setEditingId] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState(null);
+
+  const startEdit = (emp) => {
+    setForm({
+      nombre: emp.nombre || "", puesto: emp.puesto || "VENDEDOR / ATENCIÓN", fechaIngreso: emp.fechaIngreso || "",
+      salario: emp.salario || "", telefono: emp.telefono || "", domicilio: emp.domicilio || "",
+      familiarNombre: emp.familiarNombre || "", familiarTelefono: emp.familiarTelefono || "",
+      usuario: emp.usuario || "", contrasena: "", pin: emp.pin || "", nota: emp.nota || "",
+    });
+    setEditingId(emp.id);
+    setSaveMsg(null);
+  };
+  const cancelEdit = () => { setForm(blank); setEditingId(null); };
+
+  const guardar = async () => {
     if (!form.nombre || !form.salario) return;
-    setEmpleados([...empleados, { id: uid(), ...form, salario: Number(form.salario) }]);
-    setForm({ nombre: "", puesto: "VENDEDOR / ATENCIÓN", fechaIngreso: "", salario: "", telefono: "", estatus: "ACTIVO" });
+    setSaveMsg(null);
+    const id = editingId || uid();
+    const previo = editingId ? empleados.find(e => e.id === editingId) : null;
+    const remotoPrevio = previo ? previo._remote || {} : {};
+    const remoto = {
+      ...remotoPrevio,
+      idColaborador: id,
+      fechaIngreso: form.fechaIngreso,
+      nombreCompleto: form.nombre,
+      puesto: form.puesto,
+      domicilio: form.domicilio,
+      telefono: form.telefono,
+      familiarNombre: form.familiarNombre,
+      familiarTelefono: form.familiarTelefono,
+      usuario: form.usuario,
+      contrasena: form.contrasena || remotoPrevio.contrasena || "",
+      pin: form.pin,
+      nota: form.nota,
+      estatus: previo ? previo.estatus : "ACTIVO",
+    };
+    const nuevo = {
+      id, nombre: form.nombre, puesto: form.puesto, fechaIngreso: form.fechaIngreso,
+      telefono: form.telefono, domicilio: form.domicilio, familiarNombre: form.familiarNombre,
+      familiarTelefono: form.familiarTelefono, nota: form.nota,
+      estatus: previo ? previo.estatus : "ACTIVO", salario: Number(form.salario),
+      usuario: form.usuario, pin: form.pin, _remote: remoto,
+    };
+    if (odsUrl) {
+      setSaving(true);
+      try {
+        const res = await crearColaboradorRemoto(odsUrl, remoto);
+        if (!res || res.ok === false) throw new Error((res && res.mensaje) || "el servidor rechazó el guardado");
+        setSaveMsg({ tone: "success", text: editingId ? "Colaborador actualizado en ambas apps." : "Colaborador creado y disponible para iniciar sesión en ambas apps." });
+      } catch (err) {
+        setSaveMsg({ tone: "danger", text: "No se guardó en tus apps (" + err.message + "). Se guardó solo aquí en el panel." });
+      } finally {
+        setSaving(false);
+      }
+    } else {
+      setSaveMsg({ tone: "danger", text: "No está conectada la URL de ODS, así que esto solo quedó guardado aquí, no en tus apps." });
+    }
+    setEmpleados(editingId ? empleados.map(e => e.id === id ? nuevo : e) : [...empleados, nuevo]);
+    setForm(blank);
+    setEditingId(null);
   };
   const remove = (id) => setEmpleados(empleados.filter(e => e.id !== id));
-  const toggle = (id) => setEmpleados(empleados.map(e => e.id === id ? { ...e, estatus: e.estatus === "ACTIVO" ? "INACTIVO" : "ACTIVO" } : e));
+  const toggle = async (emp) => {
+    const nuevoEstatus = emp.estatus === "ACTIVO" ? "INACTIVO" : "ACTIVO";
+    setEmpleados(empleados.map(e => e.id === emp.id ? { ...e, estatus: nuevoEstatus } : e));
+    if (odsUrl) {
+      try {
+        await crearColaboradorRemoto(odsUrl, {
+          ...(emp._remote || {}),
+          idColaborador: emp.id,
+          nombreCompleto: emp.nombre,
+          puesto: emp.puesto,
+          fechaIngreso: emp.fechaIngreso,
+          telefono: emp.telefono,
+          estatus: nuevoEstatus,
+        });
+        setSaveMsg({ tone: "success", text: `Estatus de ${emp.nombre} actualizado en ambas apps.` });
+      } catch (err) {
+        setSaveMsg({ tone: "danger", text: "El estatus cambió aquí, pero no se reflejó en tus apps: " + err.message });
+      }
+    } else {
+      setSaveMsg({ tone: "danger", text: "El estatus solo cambió aquí — conecta la URL de ODS para que también se actualice en tus apps." });
+    }
+  };
+  const setSalario = (id, val) => setEmpleados(empleados.map(e => e.id === id ? { ...e, salario: Number(val) || 0 } : e));
+  const EmpStatusBadge = () => {
+    if (empleadosStatus.state === "loading") return <Pill tone="info"><RefreshCw size={11} className="inline animate-spin mr-1" />Importando…</Pill>;
+    if (empleadosStatus.state === "ok") return <Pill tone="success"><CheckCircle2 size={11} className="inline mr-1" />{empleadosStatus.count} colaboradores importados</Pill>;
+    if (empleadosStatus.state === "error") return <Pill tone="danger"><AlertCircle size={11} className="inline mr-1" />{empleadosStatus.message}</Pill>;
+    return null;
+  };
   return (
     <div>
       <SectionTitle subtitle="Plantilla operativa" title="Empleados / RH" />
@@ -693,8 +885,19 @@ function RHTab({ empleados, setEmpleados, totalNomina }) {
         <KpiCard label="Nómina mensual" value={fmtMoney(totalNomina)} icon={Wallet} />
         <KpiCard label="Total registrados" value={empleados.length} icon={Users} />
       </div>
+      <Card style={{ marginBottom: 16, borderColor: T.bronze }}>
+        <div style={{ color: T.textMuted }} className="text-xs uppercase tracking-wider mb-3">Importar colaboradores reales de tu app</div>
+        <p style={{ color: T.textMuted }} className="text-sm mb-3">
+          Trae la lista de colaboradores ya registrados en tu app de Funeraria Huerta. El salario no se importa (tu app no lo guarda) — captúralo aquí una sola vez y se conserva aunque vuelvas a importar.
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <Btn icon={RefreshCw} onClick={() => importarColaboradores()} disabled={!odsUrl}>Importar desde la app</Btn>
+          <EmpStatusBadge />
+        </div>
+        {!odsUrl && <p style={{ color: T.textMuted }} className="text-xs mt-2">Primero conecta la URL de ODS en la pestaña "Conexión de Apps".</p>}
+      </Card>
       <Card style={{ marginBottom: 16 }}>
-        <div style={{ color: T.textMuted }} className="text-xs uppercase tracking-wider mb-3">Dar de alta nuevo colaborador</div>
+        <div style={{ color: T.textMuted }} className="text-xs uppercase tracking-wider mb-3">{editingId ? "Editar colaborador" : "Dar de alta colaborador (mismo acceso en las dos apps)"}</div>
         <div className="grid md:grid-cols-3 gap-3 mb-3">
           <Input label="Nombre completo" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} />
           <Select label="Puesto" value={form.puesto} onChange={e => setForm({ ...form, puesto: e.target.value })}>
@@ -703,17 +906,48 @@ function RHTab({ empleados, setEmpleados, totalNomina }) {
           <Input label="Fecha de ingreso" type="date" value={form.fechaIngreso} onChange={e => setForm({ ...form, fechaIngreso: e.target.value })} />
           <Input label="Salario mensual ($)" type="number" value={form.salario} onChange={e => setForm({ ...form, salario: e.target.value })} />
           <Input label="Teléfono" value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} />
+          <Input label="Domicilio" value={form.domicilio} onChange={e => setForm({ ...form, domicilio: e.target.value })} />
+          <Input label="Contacto familiar (nombre)" value={form.familiarNombre} onChange={e => setForm({ ...form, familiarNombre: e.target.value })} />
+          <Input label="Contacto familiar (teléfono)" value={form.familiarTelefono} onChange={e => setForm({ ...form, familiarTelefono: e.target.value })} />
+          <Input label="Notas" value={form.nota} onChange={e => setForm({ ...form, nota: e.target.value })} />
         </div>
-        <Btn icon={Plus} onClick={add}>Registrar Colaborador</Btn>
+        <div style={{ color: T.textMuted, borderTop: `1px solid ${T.border}` }} className="text-xs uppercase tracking-wider mb-3 pt-3">Acceso (usuario, contraseña y PIN — válidos en ambas apps)</div>
+        <div className="grid md:grid-cols-3 gap-3 mb-3">
+          <Input label="Usuario" value={form.usuario} onChange={e => setForm({ ...form, usuario: e.target.value })} />
+          <Input label="Contraseña" placeholder={editingId ? "(sin cambios si lo dejas vacío)" : ""} value={form.contrasena} onChange={e => setForm({ ...form, contrasena: e.target.value })} />
+          <Input label="PIN" value={form.pin} onChange={e => setForm({ ...form, pin: e.target.value })} />
+        </div>
+        <div className="flex items-center gap-3">
+          <Btn icon={editingId ? CheckCircle2 : Plus} onClick={guardar} disabled={saving}>{saving ? "Guardando…" : editingId ? "Guardar cambios" : "Registrar Colaborador"}</Btn>
+          {editingId && <Btn variant="ghost" onClick={cancelEdit}>Cancelar</Btn>}
+        </div>
+        {saveMsg && (
+          <p style={{ color: saveMsg.tone === "success" ? T.success : T.danger }} className="text-sm mt-2">{saveMsg.text}</p>
+        )}
       </Card>
       <Card>
-        <Table headers={["Nombre", "Puesto", "Ingreso", "Salario", "Teléfono", "Estatus", ""]}>
-          {empleados.map(e => (
-            <tr key={e.id}><Td>{e.nombre}</Td><Td muted>{e.puesto}</Td><Td muted>{fmtDate(e.fechaIngreso)}</Td><Td>{fmtMoney(e.salario)}</Td><Td muted>{e.telefono}</Td>
-              <Td><button onClick={() => toggle(e.id)}><Pill tone={e.estatus === "ACTIVO" ? "success" : "danger"}>{e.estatus}</Pill></button></Td>
-              <Td><button onClick={() => remove(e.id)} style={{ color: T.danger }}><Trash2 size={14} /></button></Td></tr>
-          ))}
-        </Table>
+        {empleados.length === 0 ? (
+          <p style={{ color: T.textMuted }} className="text-sm text-center py-6">Aún no hay colaboradores. Impórtalos de tu app o regístralos manualmente arriba.</p>
+        ) : (
+          <Table headers={["Nombre", "Puesto", "Ingreso", "Salario", "Teléfono", "Estatus", ""]}>
+            {empleados.map(e => (
+              <tr key={e.id}><Td>{e.nombre}</Td><Td muted>{e.puesto}</Td><Td muted>{fmtDate(e.fechaIngreso)}</Td>
+                <Td>
+                  <input type="number" value={e.salario} onChange={ev => setSalario(e.id, ev.target.value)}
+                    style={{ background: T.surfaceAlt, border: `1px solid ${T.border}`, color: T.text, width: 90 }}
+                    className="rounded-md px-2 py-1 text-sm outline-none" />
+                </Td>
+                <Td muted>{e.telefono}</Td>
+                <Td><button onClick={() => toggle(e)}><Pill tone={e.estatus === "ACTIVO" ? "success" : "danger"}>{e.estatus}</Pill></button></Td>
+                <Td>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => startEdit(e)} style={{ color: T.bronze }}><Edit3 size={14} /></button>
+                    <button onClick={() => remove(e.id)} style={{ color: T.danger }}><Trash2 size={14} /></button>
+                  </div>
+                </Td></tr>
+            ))}
+          </Table>
+        )}
       </Card>
     </div>
   );
@@ -767,12 +1001,16 @@ function HormigaTab({ gastos, setGastos, total }) {
         </Card>
       </div>
       <Card>
-        <Table headers={["Fecha", "Categoría", "Descripción", "Responsable", "Monto", ""]}>
-          {gastos.map(g => (
-            <tr key={g.id}><Td muted>{fmtDate(g.fecha)}</Td><Td>{g.categoria}</Td><Td muted>{g.descripcion}</Td><Td muted>{g.responsable}</Td><Td>{fmtMoney(g.monto)}</Td>
-              <Td><button onClick={() => remove(g.id)} style={{ color: T.danger }}><Trash2 size={14} /></button></Td></tr>
-          ))}
-        </Table>
+        {gastos.length === 0 ? (
+          <p style={{ color: T.textMuted }} className="text-sm text-center py-6">Aún no has registrado gastos hormiga.</p>
+        ) : (
+          <Table headers={["Fecha", "Categoría", "Descripción", "Responsable", "Monto", ""]}>
+            {gastos.map(g => (
+              <tr key={g.id}><Td muted>{fmtDate(g.fecha)}</Td><Td>{g.categoria}</Td><Td muted>{g.descripcion}</Td><Td muted>{g.responsable}</Td><Td>{fmtMoney(g.monto)}</Td>
+                <Td><button onClick={() => remove(g.id)} style={{ color: T.danger }}><Trash2 size={14} /></button></Td></tr>
+            ))}
+          </Table>
+        )}
       </Card>
     </div>
   );
@@ -814,6 +1052,9 @@ function VehiculosTab({ vehiculos, setVehiculos, total }) {
         </div>
         <Btn icon={Plus} onClick={addVehiculo}>Agregar Vehículo</Btn>
       </Card>
+      {vehiculos.length === 0 && (
+        <Card><p style={{ color: T.textMuted }} className="text-sm text-center py-6">Aún no has registrado vehículos en la flota.</p></Card>
+      )}
       <div className="flex flex-col gap-4">
         {vehiculos.map(v => {
           const gf = gastoForm[v.id] || { fecha: "", tipo: TIPOS_GASTO_VEHICULO[0], monto: "", nota: "" };
@@ -851,6 +1092,234 @@ function VehiculosTab({ vehiculos, setVehiculos, total }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+const TIPOS_PRODUCTO = ["Ataúd", "Urna"];
+function ProveedoresTab({ productos, odsUrl, productosStatus, cargarProductos, guardarProductoRemoto, eliminarProductoRemoto, setProductos }) {
+  const blank = { id: "", tipo: "Ataúd", nombre: "", descripcion: "", costo: "", precioSugerido: "", proveedor: "", existencia: "", disponibleInmediato: true, activo: true };
+  const [form, setForm] = useState(blank);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const StatusBadge = () => {
+    if (productosStatus.state === "loading") return <Pill tone="info"><RefreshCw size={11} className="inline animate-spin mr-1" />Cargando…</Pill>;
+    if (productosStatus.state === "ok") return <Pill tone="success"><CheckCircle2 size={11} className="inline mr-1" />{productosStatus.count} productos</Pill>;
+    if (productosStatus.state === "error") return <Pill tone="danger"><AlertCircle size={11} className="inline mr-1" />{productosStatus.message}</Pill>;
+    return null;
+  };
+
+  const startEdit = (p) => {
+    setForm({
+      id: p.id, tipo: p.tipo || "Ataúd", nombre: p.nombre || "", descripcion: p.descripcion || "",
+      costo: p.costo || "", precioSugerido: p.precioSugerido || "", proveedor: p.proveedor || "",
+      existencia: p.existencia || "", disponibleInmediato: p.disponibleInmediato !== false, activo: p.activo !== false,
+    });
+    setEditing(true);
+  };
+
+  const guardar = async () => {
+    if (!form.nombre || !form.costo) return;
+    setSaving(true); setMsg(null);
+    const datos = { ...form, id: form.id || ("PROD-" + uid()), costo: Number(form.costo) || 0, precioSugerido: Number(form.precioSugerido) || 0, existencia: Number(form.existencia) || 0 };
+    try {
+      const res = await guardarProductoRemoto(datos);
+      if (!res || res.ok === false) throw new Error((res && res.mensaje) || "el servidor rechazó el guardado");
+      setProductos(prev => {
+        const exists = prev.some(p => p.id === datos.id);
+        return exists ? prev.map(p => p.id === datos.id ? datos : p) : [...prev, datos];
+      });
+      setMsg({ tone: "success", text: editing ? "Producto actualizado." : "Producto agregado al catálogo." });
+      setForm(blank); setEditing(false);
+    } catch (err) {
+      setMsg({ tone: "danger", text: "No se guardó: " + err.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const eliminar = async (id) => {
+    try {
+      await eliminarProductoRemoto(id);
+      setProductos(prev => prev.filter(p => p.id !== id));
+    } catch (err) {
+      setMsg({ tone: "danger", text: "No se pudo eliminar: " + err.message });
+    }
+  };
+
+  const valorInventario = productos.reduce((s, p) => s + (Number(p.costo) || 0) * (Number(p.existencia) || 0), 0);
+
+  return (
+    <div>
+      <SectionTitle subtitle="Ataúdes y urnas disponibles" title="Proveedores" />
+      {!odsUrl && (
+        <Card style={{ marginBottom: 16, borderColor: T.bronze }}>
+          <p style={{ color: T.textMuted }} className="text-sm">Conecta primero la URL de ODS en la pestaña "Conexión de Apps" — este catálogo se guarda en la misma base que usa tu app de Órdenes, para que el inventario se vea ahí también.</p>
+        </Card>
+      )}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <KpiCard label="Productos" value={productos.length} icon={Package} />
+        <KpiCard label="Ataúdes" value={productos.filter(p => p.tipo === "Ataúd").length} icon={Package} />
+        <KpiCard label="Urnas" value={productos.filter(p => p.tipo === "Urna").length} icon={Package} />
+        <KpiCard label="Valor de inventario" value={fmtMoney(valorInventario)} icon={Wallet} />
+      </div>
+
+      <Card style={{ marginBottom: 16 }}>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div style={{ color: T.textMuted }} className="text-xs uppercase tracking-wider">{editing ? "Editar producto" : "Agregar producto al catálogo"}</div>
+          <div className="flex items-center gap-2">
+            <Btn icon={RefreshCw} variant="ghost" onClick={() => cargarProductos()} disabled={!odsUrl}>Actualizar lista</Btn>
+            <StatusBadge />
+          </div>
+        </div>
+        <div className="grid md:grid-cols-3 gap-3 mb-3">
+          <Select label="Tipo" value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })}>
+            {TIPOS_PRODUCTO.map(t => <option key={t}>{t}</option>)}
+          </Select>
+          <Input label="Nombre" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} />
+          <Input label="Proveedor" value={form.proveedor} onChange={e => setForm({ ...form, proveedor: e.target.value })} />
+          <Input label="Costo ($)" type="number" value={form.costo} onChange={e => setForm({ ...form, costo: e.target.value })} />
+          <Input label="Precio sugerido al cliente ($)" type="number" value={form.precioSugerido} onChange={e => setForm({ ...form, precioSugerido: e.target.value })} />
+          <Input label="Existencia (piezas)" type="number" value={form.existencia} onChange={e => setForm({ ...form, existencia: e.target.value })} />
+          <Input label="Descripción" value={form.descripcion} onChange={e => setForm({ ...form, descripcion: e.target.value })} />
+        </div>
+        <div className="flex flex-wrap items-center gap-4 mb-3">
+          <label className="flex items-center gap-2 text-sm" style={{ color: T.textMuted }}>
+            <input type="checkbox" checked={form.disponibleInmediato} onChange={e => setForm({ ...form, disponibleInmediato: e.target.checked })} />
+            Disponible para servicios de uso inmediato (ODS)
+          </label>
+          <label className="flex items-center gap-2 text-sm" style={{ color: T.textMuted }}>
+            <input type="checkbox" checked={form.activo} onChange={e => setForm({ ...form, activo: e.target.checked })} />
+            Activo
+          </label>
+        </div>
+        <div className="flex items-center gap-3">
+          <Btn icon={editing ? CheckCircle2 : Plus} onClick={guardar} disabled={saving || !odsUrl}>{saving ? "Guardando…" : editing ? "Guardar cambios" : "Agregar Producto"}</Btn>
+          {editing && <Btn variant="ghost" onClick={() => { setForm(blank); setEditing(false); }}>Cancelar</Btn>}
+        </div>
+        {msg && <p style={{ color: msg.tone === "success" ? T.success : T.danger }} className="text-sm mt-2">{msg.text}</p>}
+      </Card>
+
+      <Card>
+        {productos.length === 0 ? (
+          <p style={{ color: T.textMuted }} className="text-sm text-center py-6">Aún no hay productos en el catálogo.</p>
+        ) : (
+          <Table headers={["Tipo", "Nombre", "Proveedor", "Costo", "Precio sugerido", "Existencia", "Inmediato", ""]}>
+            {productos.map(p => (
+              <tr key={p.id}>
+                <Td muted>{p.tipo}</Td><Td>{p.nombre}</Td><Td muted>{p.proveedor}</Td>
+                <Td>{fmtMoney(p.costo)}</Td><Td>{fmtMoney(p.precioSugerido)}</Td><Td muted>{p.existencia}</Td>
+                <Td><Pill tone={p.disponibleInmediato !== false ? "success" : "info"}>{p.disponibleInmediato !== false ? "Sí" : "No"}</Pill></Td>
+                <Td>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => startEdit(p)} style={{ color: T.bronze }}><Edit3 size={14} /></button>
+                    <button onClick={() => eliminar(p.id)} style={{ color: T.danger }}><Trash2 size={14} /></button>
+                  </div>
+                </Td>
+              </tr>
+            ))}
+          </Table>
+        )}
+      </Card>
+
+      <Card style={{ marginTop: 16 }}>
+        <p style={{ color: T.textMuted }} className="text-sm">
+          Nota: para que estos productos aparezcan como opción seleccionable directamente dentro de tu app de Órdenes (ODS) al capturar un servicio, esa app necesita leer este mismo catálogo (acción <code style={{ color: T.bronzeLight }}>obtenerProductos</code>). Si me compartes el código de esa app, agrego ahí el selector.
+        </p>
+      </Card>
+    </div>
+  );
+}
+
+function RentabilidadTab({ odsData, isDemoOds, gastosFijosMes }) {
+  const ordenes = odsData;
+  const n = Math.max(ordenes.length, 1);
+  const costoFijoPorServicio = gastosFijosMes / n;
+
+  const filas = ordenes.map(o => {
+    const costoDirecto = o.costoDirecto || 0;
+    const margenBruto = (o.total || 0) - costoDirecto;
+    const utilidadNeta = margenBruto - costoFijoPorServicio;
+    const margenPct = o.total > 0 ? (utilidadNeta / o.total) * 100 : 0;
+    return { ...o, costoDirecto, margenBruto, utilidadNeta, margenPct };
+  });
+
+  const ingresos = filas.reduce((s, f) => s + (f.total || 0), 0);
+  const costosDirectos = filas.reduce((s, f) => s + f.costoDirecto, 0);
+  const costosFijosTotales = costoFijoPorServicio * filas.length;
+  const utilidadTotal = ingresos - costosDirectos - costosFijosTotales;
+  const margenPctTotal = ingresos > 0 ? (utilidadTotal / ingresos) * 100 : 0;
+
+  const composicion = [
+    { name: "Costos directos", value: costosDirectos },
+    { name: "Costos fijos asignados", value: costosFijosTotales },
+    { name: "Utilidad neta", value: Math.max(utilidadTotal, 0) },
+  ];
+
+  return (
+    <div>
+      <SectionTitle subtitle="¿Son rentables tus precios actuales?" title="Rentabilidad de Servicios" />
+      {isDemoOds && <DemoBanner appName="Funeraria Huerta (ODS)" />}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <KpiCard label="Ingresos (ODS)" value={fmtMoney(ingresos)} icon={TrendingUp} />
+        <KpiCard label="Costos directos" value={fmtMoney(costosDirectos)} icon={Package} />
+        <KpiCard label="Costos fijos asignados" value={fmtMoney(costosFijosTotales)} icon={Wallet} />
+        <KpiCard label="Utilidad neta estimada" value={fmtMoney(utilidadTotal)} delta={`${margenPctTotal.toFixed(1)}% margen`} deltaGood={utilidadTotal >= 0} icon={Gauge} />
+      </div>
+
+      <Card style={{ marginBottom: 16 }}>
+        <p style={{ color: T.textMuted }} className="text-sm">
+          Los costos fijos (nómina + vehículos + gastos hormiga del periodo) se reparten por partes iguales entre las {filas.length} órdenes registradas: {fmtMoney(costoFijoPorServicio)} por servicio. Si el número de servicios reales al mes es distinto a este conteo, ajusta el periodo en "Conexión de Apps" para una lectura más exacta.
+        </p>
+      </Card>
+
+      <div className="grid md:grid-cols-2 gap-4 mb-6">
+        <Card>
+          <div style={{ color: T.textMuted }} className="text-xs uppercase tracking-wider mb-3">Composición del ingreso</div>
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart>
+              <Pie data={composicion} dataKey="value" nameKey="name" innerRadius={50} outerRadius={85} paddingAngle={2}>
+                {composicion.map((_, i) => <Cell key={i} fill={[T.danger, T.info, T.success][i % 3]} />)}
+              </Pie>
+              <Tooltip contentStyle={{ background: T.surfaceAlt, border: `1px solid ${T.border}`, color: T.text }} formatter={(v) => fmtMoney(v)} />
+              <Legend wrapperStyle={{ fontSize: 11, color: T.textMuted }} />
+            </PieChart>
+          </ResponsiveContainer>
+        </Card>
+        <Card>
+          <div style={{ color: T.textMuted }} className="text-xs uppercase tracking-wider mb-3">Utilidad neta por servicio</div>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={filas.slice(0, 12)}>
+              <CartesianGrid stroke={T.border} vertical={false} />
+              <XAxis dataKey="folio" stroke={T.textMuted} fontSize={10} />
+              <YAxis stroke={T.textMuted} fontSize={11} tickFormatter={(v) => `${v / 1000}k`} />
+              <Tooltip contentStyle={{ background: T.surfaceAlt, border: `1px solid ${T.border}`, color: T.text }} formatter={(v) => fmtMoney(v)} />
+              <Bar dataKey="utilidadNeta" name="Utilidad neta" radius={[3, 3, 0, 0]}>
+                {filas.slice(0, 12).map((f, i) => <Cell key={i} fill={f.utilidadNeta >= 0 ? T.success : T.danger} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+      </div>
+
+      <Card>
+        {filas.length === 0 ? (
+          <p style={{ color: T.textMuted }} className="text-sm text-center py-6">No hay órdenes para analizar todavía.</p>
+        ) : (
+          <Table headers={["Folio", "Precio", "Costo directo", "Costo fijo asignado", "Utilidad neta", "Margen"]}>
+            {filas.map(f => (
+              <tr key={f.folio}>
+                <Td muted>{f.folio}</Td><Td>{fmtMoney(f.total)}</Td><Td>{fmtMoney(f.costoDirecto)}</Td>
+                <Td>{fmtMoney(costoFijoPorServicio)}</Td>
+                <Td><span style={{ color: f.utilidadNeta >= 0 ? T.success : T.danger }}>{fmtMoney(f.utilidadNeta)}</span></Td>
+                <Td><Pill tone={f.margenPct >= 20 ? "success" : f.margenPct >= 0 ? "info" : "danger"}>{f.margenPct.toFixed(1)}%</Pill></Td>
+              </tr>
+            ))}
+          </Table>
+        )}
+      </Card>
     </div>
   );
 }
