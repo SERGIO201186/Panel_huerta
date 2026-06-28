@@ -84,6 +84,8 @@ const Wrench = mkIcon(<><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3
 const Fuel = mkIcon(<><line x1="3" y1="22" x2="15" y2="22"/><line x1="4" y1="9" x2="14" y2="9"/><path d="M14 22V4a2 2 0 00-2-2H6a2 2 0 00-2 2v18"/><path d="M14 13h2a2 2 0 012 2v2a2 2 0 002 2"/><circle cx="18" cy="9" r="1.5"/></>);
 const ShieldCheck = mkIcon(<><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></>);
 const Package = mkIcon(<><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></>);
+const Building = mkIcon(<><rect x="4" y="2" width="16" height="20" rx="1"/><line x1="9" y1="7" x2="9" y2="7"/><line x1="15" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="9" y2="11"/><line x1="15" y1="11" x2="15" y2="11"/><line x1="9" y1="15" x2="9" y2="15"/><line x1="15" y1="15" x2="15" y2="15"/><path d="M9 22v-4h6v4"/></>);
+const Contact2 = mkIcon(<><circle cx="12" cy="8" r="3"/><path d="M5 21v-1a7 7 0 0114 0v1"/><line x1="2" y1="9" x2="2" y2="13"/><line x1="22" y1="9" x2="22" y2="13"/></>);
 const Gauge = mkIcon(<><path d="M12 3a9 9 0 100 18 9 9 0 000-18z"/><path d="M12 12l4-4"/><path d="M12 8v0"/></>);
 const Edit3 = mkIcon(<><path d="M17 3a2.85 2.85 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></>);
 
@@ -269,6 +271,7 @@ const NAV = [
   { id: "rh", label: "Empleados / RH", icon: Users },
   { id: "hormiga", label: "Gastos Hormiga", icon: Receipt },
   { id: "vehiculos", label: "Vehículos", icon: Truck },
+  { id: "fijos", label: "Gastos Fijos", icon: Building },
   { id: "proveedores", label: "Proveedores (Ataúdes/Urnas)", icon: Package },
   { id: "rentabilidad", label: "Rentabilidad", icon: Gauge },
   { id: "conexion", label: "Conexión de Apps", icon: Link2 },
@@ -293,7 +296,9 @@ function Dashboard() {
   const [empleados, setEmpleados] = useState(SEED_EMPLEADOS);
   const [gastos, setGastos] = useState(SEED_GASTOS);
   const [vehiculos, setVehiculos] = useState(SEED_VEHICULOS);
-  const [config, setConfig] = useState({ odsUrl: "", previsionUrl: "" });
+  const [gastosFijos, setGastosFijos] = useState([]);
+  const [proveedoresDir, setProveedoresDir] = useState([]);
+  const [config, setConfig] = useState({ odsUrl: "", previsionUrl: "", tiendaUrl: "" });
   const [odsData, setOdsData] = useState(SEED_ODS);
   const [previsionData, setPrevisionData] = useState(SEED_PREVISION);
   const [isDemoOds, setIsDemoOds] = useState(true);
@@ -306,74 +311,120 @@ function Dashboard() {
   useEffect(() => {
     (async () => {
       setCloudUrl(getCloudUrl());
-      const [emp, gas, veh, cfg] = await Promise.all([
+      const [emp, gas, veh, gfijos, provs, cfg] = await Promise.all([
         loadKey("empleados", SEED_EMPLEADOS),
         loadKey("gastos-hormiga", SEED_GASTOS),
         loadKey("vehiculos", SEED_VEHICULOS),
-        loadKey("integracion-config", { odsUrl: "", previsionUrl: "" }),
+        loadKey("gastos-fijos", []),
+        loadKey("proveedores-directorio", []),
+        loadKey("integracion-config", { odsUrl: "", previsionUrl: "", tiendaUrl: "" }),
       ]);
       setEmpleados(emp);
       setGastos(gas);
       setVehiculos(veh);
+      setGastosFijos(gfijos);
+      setProveedoresDir(provs);
       setConfig(cfg);
       setLoaded(true);
-      if (cfg.odsUrl) { probarConexion("ods", cfg.odsUrl); cargarProductos(cfg.odsUrl); }
+      if (cfg.odsUrl) probarConexion("ods", cfg.odsUrl);
+      if (cfg.tiendaUrl) cargarProductos(cfg.tiendaUrl);
       if (cfg.previsionUrl) probarConexion("prevision", cfg.previsionUrl);
     })();
   }, []);
   useEffect(() => { if (loaded) saveKey("empleados", empleados); }, [empleados, loaded]);
   useEffect(() => { if (loaded) saveKey("gastos-hormiga", gastos); }, [gastos, loaded]);
   useEffect(() => { if (loaded) saveKey("vehiculos", vehiculos); }, [vehiculos, loaded]);
+  useEffect(() => { if (loaded) saveKey("gastos-fijos", gastosFijos); }, [gastosFijos, loaded]);
+  useEffect(() => { if (loaded) saveKey("proveedores-directorio", proveedoresDir); }, [proveedoresDir, loaded]);
   useEffect(() => { if (loaded) saveKey("integracion-config", config); }, [config, loaded]);
 
   const [empleadosStatus, setEmpleadosStatus] = useState({ state: "idle" });
   const [productos, setProductos] = useState([]);
   const [productosStatus, setProductosStatus] = useState({ state: "idle" });
+  const [tiendaStatus, setTiendaStatus] = useState({ state: "idle" });
+
+  async function probarTienda(url) {
+    setTiendaStatus({ state: "loading" });
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      if (!Array.isArray(data)) throw new Error("La respuesta no es una lista de productos.");
+      setTiendaStatus({ state: "ok", count: data.length });
+      cargarProductos(url);
+    } catch (err) {
+      setTiendaStatus({ state: "error", message: err.message });
+    }
+  }
+
+  function toDirectImageUrl_(url) {
+    if (!url) return "";
+    const t = String(url).trim();
+    let m = t.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (m) return `https://lh3.googleusercontent.com/d/${m[1]}`;
+    m = t.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (m && t.includes("drive.google.com")) return `https://lh3.googleusercontent.com/d/${m[1]}`;
+    m = t.match(/lh3\.googleusercontent\.com\/d\/([a-zA-Z0-9_-]+)/);
+    if (m) return `https://lh3.googleusercontent.com/d/${m[1]}`;
+    return t;
+  }
+
+  function generarSkuProducto_(segmentKey, lista) {
+    const prefijos = { inmediato: "INM", futuro: "FUT", otros: "OTR" };
+    const prefix = prefijos[segmentKey] || "GEN";
+    const pat = new RegExp("^" + prefix + "-(\\d+)$");
+    let max = 0;
+    lista.forEach(p => { const mm = String(p.id).match(pat); if (mm) { const n = parseInt(mm[1], 10); if (n > max) max = n; } });
+    return `${prefix}-${String(max + 1).padStart(3, "0")}`;
+  }
 
   async function cargarProductos(urlOverride) {
-    const url = urlOverride || config.odsUrl;
-    if (!url) { setProductosStatus({ state: "error", message: "Conecta primero la URL de ODS en Conexión de Apps" }); return; }
+    const url = urlOverride || config.tiendaUrl;
+    if (!url) { setProductosStatus({ state: "error", message: "Conecta primero la URL de la Tienda Virtual en Conexión de Apps" }); return; }
     setProductosStatus({ state: "loading" });
     try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ accion: "obtenerProductos", filtros: {} }),
-      });
+      const res = await fetch(url);
       if (!res.ok) throw new Error("HTTP " + res.status);
-      const raw = await res.json();
-      const arr = extractArray_(raw);
-      if (!arr) {
-        setProductosStatus({ state: "error", message: 'Tu Apps Script todavía no tiene la acción "obtenerProductos". Pega el código que te indico más abajo.' });
-        return;
-      }
-      setProductos(arr);
-      setProductosStatus({ state: "ok", count: arr.length });
+      const data = await res.json();
+      if (!Array.isArray(data)) throw new Error("La tienda no devolvió una lista de productos.");
+      const internos = await loadKey("productos-internos", {});
+      const merged = data.map(p => ({ ...p, precio: Number(p.precio) || 0, ...(internos[p.id] || {}) }));
+      setProductos(merged);
+      setProductosStatus({ state: "ok", count: merged.length });
     } catch (err) {
       setProductosStatus({ state: "error", message: err.message });
     }
   }
 
-  async function guardarProductoRemoto(datos) {
-    if (!config.odsUrl) throw new Error("No hay URL de ODS conectada");
-    const res = await fetch(config.odsUrl, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ accion: "guardarProducto", datos }),
-    });
+  async function guardarProductoRemoto(datos, esNuevo) {
+    if (!config.tiendaUrl) throw new Error("No hay URL de Tienda Virtual conectada");
+    const payload = {
+      id: datos.id,
+      segment: datos.segment,
+      categoria: datos.categoria,
+      nombre: datos.nombre,
+      descripcion: datos.descripcion || "",
+      precio: Number(datos.precio) || 0,
+      imagen: toDirectImageUrl_(datos.imagen || ""),
+      action: esNuevo ? "add" : "update",
+    };
+    const res = await fetch(config.tiendaUrl, { method: "POST", body: JSON.stringify(payload) });
     if (!res.ok) throw new Error("HTTP " + res.status);
-    return res.json();
+    // Guarda los datos internos (costo, proveedor, existencia) solo en el panel, no en la tienda pública
+    const internos = await loadKey("productos-internos", {});
+    internos[datos.id] = { costo: datos.costo || 0, proveedor: datos.proveedor || "", existencia: datos.existencia || 0 };
+    await saveKey("productos-internos", internos);
+    return { ok: true, id: datos.id, imagen: payload.imagen };
   }
 
   async function eliminarProductoRemoto(id) {
-    if (!config.odsUrl) throw new Error("No hay URL de ODS conectada");
-    const res = await fetch(config.odsUrl, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ accion: "eliminarProducto", id }),
-    });
+    if (!config.tiendaUrl) throw new Error("No hay URL de Tienda Virtual conectada");
+    const res = await fetch(config.tiendaUrl, { method: "POST", body: JSON.stringify({ action: "delete", id }) });
     if (!res.ok) throw new Error("HTTP " + res.status);
-    return res.json();
+    const internos = await loadKey("productos-internos", {});
+    delete internos[id];
+    await saveKey("productos-internos", internos);
+    return { ok: true };
   }
 
   async function importarColaboradores(urlOverride) {
@@ -454,12 +505,13 @@ function Dashboard() {
   const totalNomina = useMemo(() => empleados.filter(e => e.estatus === "ACTIVO").reduce((s, e) => s + Number(e.salario || 0), 0), [empleados]);
   const totalGastosHormiga = useMemo(() => gastos.reduce((s, g) => s + Number(g.monto || 0), 0), [gastos]);
   const totalVehiculos = useMemo(() => vehiculos.reduce((s, v) => s + v.gastos.reduce((a, g) => a + Number(g.monto || 0), 0), 0), [vehiculos]);
+  const totalGastosFijos = useMemo(() => gastosFijos.filter(g => g.activo !== false).reduce((s, g) => s + Number(g.monto || 0), 0), [gastosFijos]);
   const totalInmediato = useMemo(() => odsData.reduce((s, o) => s + Number(o.total || 0), 0), [odsData]);
   const porCobrarInmediato = useMemo(() => odsData.reduce((s, o) => s + Number(o.restante || 0), 0), [odsData]);
   const totalPrevisionContratado = useMemo(() => previsionData.reduce((s, p) => s + Number(p.total || 0), 0), [previsionData]);
   const totalPrevisionAbonado = useMemo(() => previsionData.reduce((s, p) => s + Number(p.abonado || 0), 0), [previsionData]);
   const porCobrarPrevision = totalPrevisionContratado - totalPrevisionAbonado;
-  const gastosOperativosMes = totalNomina + totalGastosHormiga + totalVehiculos;
+  const gastosOperativosMes = totalNomina + totalGastosHormiga + totalVehiculos + totalGastosFijos;
   const ingresosMes = totalInmediato + totalPrevisionAbonado;
   const utilidadMes = ingresosMes - gastosOperativosMes;
 
@@ -467,9 +519,10 @@ function Dashboard() {
     const map = {};
     gastos.forEach(g => { map[g.categoria] = (map[g.categoria] || 0) + Number(g.monto || 0); });
     vehiculos.forEach(v => v.gastos.forEach(g => { map["Vehículos: " + g.tipo] = (map["Vehículos: " + g.tipo] || 0) + Number(g.monto || 0); }));
+    gastosFijos.filter(g => g.activo !== false).forEach(g => { map["Fijo: " + g.concepto] = (map["Fijo: " + g.concepto] || 0) + Number(g.monto || 0); });
     map["Nómina"] = totalNomina;
     return Object.entries(map).map(([name, value]) => ({ name, value }));
-  }, [gastos, vehiculos, totalNomina]);
+  }, [gastos, vehiculos, gastosFijos, totalNomina]);
 
   function extractArray_(data) {
     if (Array.isArray(data)) return data;
@@ -622,9 +675,10 @@ function Dashboard() {
           {tab === "rh" && <RHTab empleados={empleados} setEmpleados={setEmpleados} totalNomina={totalNomina} odsUrl={config.odsUrl} importarColaboradores={importarColaboradores} empleadosStatus={empleadosStatus} crearColaboradorRemoto={crearColaboradorRemoto} />}
           {tab === "hormiga" && <HormigaTab gastos={gastos} setGastos={setGastos} total={totalGastosHormiga} />}
           {tab === "vehiculos" && <VehiculosTab vehiculos={vehiculos} setVehiculos={setVehiculos} total={totalVehiculos} />}
-          {tab === "proveedores" && <ProveedoresTab productos={productos} odsUrl={config.odsUrl} productosStatus={productosStatus} cargarProductos={cargarProductos} guardarProductoRemoto={guardarProductoRemoto} eliminarProductoRemoto={eliminarProductoRemoto} setProductos={setProductos} />}
+          {tab === "fijos" && <GastosFijosTab gastosFijos={gastosFijos} setGastosFijos={setGastosFijos} total={totalGastosFijos} />}
+          {tab === "proveedores" && <ProveedoresTab productos={productos} tiendaUrl={config.tiendaUrl} productosStatus={productosStatus} cargarProductos={cargarProductos} guardarProductoRemoto={guardarProductoRemoto} eliminarProductoRemoto={eliminarProductoRemoto} setProductos={setProductos} generarSkuProducto={generarSkuProducto_} toDirectImageUrl={toDirectImageUrl_} proveedoresDir={proveedoresDir} setProveedoresDir={setProveedoresDir} />}
           {tab === "rentabilidad" && <RentabilidadTab odsData={odsData} isDemoOds={isDemoOds} gastosFijosMes={gastosOperativosMes} />}
-          {tab === "conexion" && <ConexionTab config={config} setConfig={setConfig} odsStatus={odsStatus} previsionStatus={previsionStatus} probarConexion={probarConexion} cloudUrl={cloudUrl} cloudStatus={cloudStatus} probarNube={probarNube} />}
+          {tab === "conexion" && <ConexionTab config={config} setConfig={setConfig} odsStatus={odsStatus} previsionStatus={previsionStatus} probarConexion={probarConexion} cloudUrl={cloudUrl} cloudStatus={cloudStatus} probarNube={probarNube} tiendaStatus={tiendaStatus} probarTienda={probarTienda} />}
         </main>
       </div>
     </div>
@@ -1096,13 +1150,98 @@ function VehiculosTab({ vehiculos, setVehiculos, total }) {
   );
 }
 
+const CATEGORIAS_FIJOS = ["Renta", "Pago de crédito/préstamo", "Seguro", "Servicios (luz/agua/internet)", "Software/suscripciones", "Otro"];
+function GastosFijosTab({ gastosFijos, setGastosFijos, total }) {
+  const blank = { concepto: "", categoria: CATEGORIAS_FIJOS[0], monto: "", diaPago: "", beneficiario: "", fechaInicio: "", fechaFin: "", saldoRestante: "", activo: true, nota: "" };
+  const [form, setForm] = useState(blank);
+  const [editingId, setEditingId] = useState(null);
+
+  const startEdit = (g) => { setForm({ ...blank, ...g }); setEditingId(g.id); };
+  const cancelEdit = () => { setForm(blank); setEditingId(null); };
+
+  const guardar = () => {
+    if (!form.concepto || !form.monto) return;
+    const registro = { ...form, id: editingId || uid(), monto: Number(form.monto) || 0, saldoRestante: form.saldoRestante === "" ? "" : Number(form.saldoRestante) || 0 };
+    setGastosFijos(editingId ? gastosFijos.map(g => g.id === editingId ? registro : g) : [...gastosFijos, registro]);
+    setForm(blank); setEditingId(null);
+  };
+  const remove = (id) => setGastosFijos(gastosFijos.filter(g => g.id !== id));
+  const toggleActivo = (id) => setGastosFijos(gastosFijos.map(g => g.id === id ? { ...g, activo: g.activo === false } : g));
+
+  return (
+    <div>
+      <SectionTitle subtitle="Rentas, créditos y compromisos recurrentes" title="Gastos Fijos" />
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        <KpiCard label="Total mensual (activos)" value={fmtMoney(total)} icon={Building} />
+        <KpiCard label="Conceptos registrados" value={gastosFijos.length} icon={Building} />
+      </div>
+
+      <Card style={{ marginBottom: 16 }}>
+        <div style={{ color: T.textMuted }} className="text-xs uppercase tracking-wider mb-3">{editingId ? "Editar concepto" : "Registrar gasto fijo"}</div>
+        <div className="grid md:grid-cols-3 gap-3 mb-3">
+          <Input label="Concepto (ej. Renta del local)" value={form.concepto} onChange={e => setForm({ ...form, concepto: e.target.value })} />
+          <Select label="Categoría" value={form.categoria} onChange={e => setForm({ ...form, categoria: e.target.value })}>
+            {CATEGORIAS_FIJOS.map(c => <option key={c}>{c}</option>)}
+          </Select>
+          <Input label="Monto mensual ($)" type="number" value={form.monto} onChange={e => setForm({ ...form, monto: e.target.value })} />
+          <Input label="Día de pago (1-31)" type="number" value={form.diaPago} onChange={e => setForm({ ...form, diaPago: e.target.value })} />
+          <Input label="Beneficiario / Acreedor" value={form.beneficiario} onChange={e => setForm({ ...form, beneficiario: e.target.value })} />
+          <Input label="Fecha de inicio" type="date" value={form.fechaInicio} onChange={e => setForm({ ...form, fechaInicio: e.target.value })} />
+          <Input label="Fecha fin (si es a plazo, ej. crédito)" type="date" value={form.fechaFin} onChange={e => setForm({ ...form, fechaFin: e.target.value })} />
+          <Input label="Saldo restante (si aplica)" type="number" value={form.saldoRestante} onChange={e => setForm({ ...form, saldoRestante: e.target.value })} />
+          <Input label="Nota" value={form.nota} onChange={e => setForm({ ...form, nota: e.target.value })} />
+        </div>
+        <div className="flex items-center gap-3">
+          <Btn icon={editingId ? CheckCircle2 : Plus} onClick={guardar}>{editingId ? "Guardar cambios" : "Registrar Gasto Fijo"}</Btn>
+          {editingId && <Btn variant="ghost" onClick={cancelEdit}>Cancelar</Btn>}
+        </div>
+      </Card>
+
+      <Card>
+        {gastosFijos.length === 0 ? (
+          <p style={{ color: T.textMuted }} className="text-sm text-center py-6">Aún no has registrado gastos fijos.</p>
+        ) : (
+          <Table headers={["Concepto", "Categoría", "Monto", "Día de pago", "Beneficiario", "Saldo restante", "Activo", ""]}>
+            {gastosFijos.map(g => (
+              <tr key={g.id}>
+                <Td>{g.concepto}</Td><Td muted>{g.categoria}</Td><Td>{fmtMoney(g.monto)}</Td>
+                <Td muted>{g.diaPago || "—"}</Td><Td muted>{g.beneficiario}</Td>
+                <Td muted>{g.saldoRestante !== "" && g.saldoRestante !== undefined ? fmtMoney(g.saldoRestante) : "—"}</Td>
+                <Td><button onClick={() => toggleActivo(g.id)}><Pill tone={g.activo !== false ? "success" : "danger"}>{g.activo !== false ? "Activo" : "Pausado"}</Pill></button></Td>
+                <Td>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => startEdit(g)} style={{ color: T.bronze }}><Edit3 size={14} /></button>
+                    <button onClick={() => remove(g.id)} style={{ color: T.danger }}><Trash2 size={14} /></button>
+                  </div>
+                </Td>
+              </tr>
+            ))}
+          </Table>
+        )}
+      </Card>
+    </div>
+  );
+}
+
 const TIPOS_PRODUCTO = ["Ataúd", "Urna"];
-function ProveedoresTab({ productos, odsUrl, productosStatus, cargarProductos, guardarProductoRemoto, eliminarProductoRemoto, setProductos }) {
+function ProveedoresTab({ productos, odsUrl, productosStatus, cargarProductos, guardarProductoRemoto, eliminarProductoRemoto, setProductos, proveedoresDir, setProveedoresDir }) {
   const blank = { id: "", tipo: "Ataúd", nombre: "", descripcion: "", costo: "", precioSugerido: "", proveedor: "", existencia: "", disponibleInmediato: true, activo: true };
   const [form, setForm] = useState(blank);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
+
+  const blankProv = { nombre: "", categoria: "Ataúdes", contacto: "", telefono: "", correo: "", direccion: "", nota: "" };
+  const [provForm, setProvForm] = useState(blankProv);
+  const [editingProvId, setEditingProvId] = useState(null);
+  const guardarProveedor = () => {
+    if (!provForm.nombre) return;
+    const registro = { ...provForm, id: editingProvId || uid() };
+    setProveedoresDir(editingProvId ? proveedoresDir.map(p => p.id === editingProvId ? registro : p) : [...proveedoresDir, registro]);
+    setProvForm(blankProv); setEditingProvId(null);
+  };
+  const startEditProv = (p) => { setProvForm({ ...blankProv, ...p }); setEditingProvId(p.id); };
+  const removeProv = (id) => setProveedoresDir(proveedoresDir.filter(p => p.id !== id));
 
   const StatusBadge = () => {
     if (productosStatus.state === "loading") return <Pill tone="info"><RefreshCw size={11} className="inline animate-spin mr-1" />Cargando…</Pill>;
@@ -1224,10 +1363,49 @@ function ProveedoresTab({ productos, odsUrl, productosStatus, cargarProductos, g
         )}
       </Card>
 
-      <Card style={{ marginTop: 16 }}>
+      <Card style={{ marginTop: 16, marginBottom: 16 }}>
         <p style={{ color: T.textMuted }} className="text-sm">
           Nota: para que estos productos aparezcan como opción seleccionable directamente dentro de tu app de Órdenes (ODS) al capturar un servicio, esa app necesita leer este mismo catálogo (acción <code style={{ color: T.bronzeLight }}>obtenerProductos</code>). Si me compartes el código de esa app, agrego ahí el selector.
         </p>
+      </Card>
+
+      <SectionTitle subtitle="Contactos de tus proveedores" title="Directorio de Proveedores" />
+      <Card style={{ marginBottom: 16 }}>
+        <div style={{ color: T.textMuted }} className="text-xs uppercase tracking-wider mb-3">{editingProvId ? "Editar proveedor" : "Agregar proveedor"}</div>
+        <div className="grid md:grid-cols-3 gap-3 mb-3">
+          <Input label="Nombre / Empresa" value={provForm.nombre} onChange={e => setProvForm({ ...provForm, nombre: e.target.value })} />
+          <Select label="Categoría" value={provForm.categoria} onChange={e => setProvForm({ ...provForm, categoria: e.target.value })}>
+            <option>Ataúdes</option><option>Urnas</option><option>Flores/Arreglos</option><option>Transporte</option><option>Insumos/Embalsamado</option><option>Imprenta/Papelería</option><option>Otro</option>
+          </Select>
+          <Input label="Persona de contacto" value={provForm.contacto} onChange={e => setProvForm({ ...provForm, contacto: e.target.value })} />
+          <Input label="Teléfono" value={provForm.telefono} onChange={e => setProvForm({ ...provForm, telefono: e.target.value })} />
+          <Input label="Correo" value={provForm.correo} onChange={e => setProvForm({ ...provForm, correo: e.target.value })} />
+          <Input label="Dirección" value={provForm.direccion} onChange={e => setProvForm({ ...provForm, direccion: e.target.value })} />
+          <Input label="Nota" value={provForm.nota} onChange={e => setProvForm({ ...provForm, nota: e.target.value })} />
+        </div>
+        <div className="flex items-center gap-3">
+          <Btn icon={editingProvId ? CheckCircle2 : Plus} onClick={guardarProveedor}>{editingProvId ? "Guardar cambios" : "Agregar Proveedor"}</Btn>
+          {editingProvId && <Btn variant="ghost" onClick={() => { setProvForm(blankProv); setEditingProvId(null); }}>Cancelar</Btn>}
+        </div>
+      </Card>
+      <Card>
+        {proveedoresDir.length === 0 ? (
+          <p style={{ color: T.textMuted }} className="text-sm text-center py-6">Aún no has registrado proveedores.</p>
+        ) : (
+          <Table headers={["Nombre", "Categoría", "Contacto", "Teléfono", "Correo", ""]}>
+            {proveedoresDir.map(p => (
+              <tr key={p.id}>
+                <Td>{p.nombre}</Td><Td muted>{p.categoria}</Td><Td muted>{p.contacto}</Td><Td muted>{p.telefono}</Td><Td muted>{p.correo}</Td>
+                <Td>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => startEditProv(p)} style={{ color: T.bronze }}><Edit3 size={14} /></button>
+                    <button onClick={() => removeProv(p.id)} style={{ color: T.danger }}><Trash2 size={14} /></button>
+                  </div>
+                </Td>
+              </tr>
+            ))}
+          </Table>
+        )}
       </Card>
     </div>
   );
@@ -1324,7 +1502,7 @@ function RentabilidadTab({ odsData, isDemoOds, gastosFijosMes }) {
   );
 }
 
-function ConexionTab({ config, setConfig, odsStatus, previsionStatus, probarConexion, cloudUrl, cloudStatus, probarNube }) {
+function ConexionTab({ config, setConfig, odsStatus, previsionStatus, probarConexion, cloudUrl, cloudStatus, probarNube, tiendaStatus, probarTienda }) {
   const [urlInput, setUrlInput] = useState(cloudUrl || "");
   useEffect(() => { setUrlInput(cloudUrl || ""); }, [cloudUrl]);
   const StatusBadge = ({ status }) => {
@@ -1341,7 +1519,7 @@ function ConexionTab({ config, setConfig, odsStatus, previsionStatus, probarCone
   };
   return (
     <div>
-      <SectionTitle subtitle="Vincula tus dos aplicaciones" title="Conexión de Apps" />
+      <SectionTitle subtitle="Vincula tus aplicaciones" title="Conexión de Apps" />
 
       <Card style={{ marginBottom: 16, borderColor: T.bronze }}>
         <div style={{ color: T.textMuted }} className="text-xs uppercase tracking-wider mb-3">Almacenamiento en la nube (RH, Gastos Hormiga, Vehículos)</div>
@@ -1359,7 +1537,7 @@ function ConexionTab({ config, setConfig, odsStatus, previsionStatus, probarCone
 
       <Card style={{ marginBottom: 16 }}>
         <p style={{ color: T.textMuted }} className="text-sm mb-2">
-          Tus dos apps ya sincronizan su información con Google Sheets mediante un Google Apps Script. Pega aquí la URL de cada Web App (termina en <code style={{ color: T.bronzeLight }}>/exec</code>) para que este panel jale tus datos reales.
+          Tus apps ya sincronizan su información con Google Sheets mediante un Google Apps Script. Pega aquí la URL de cada Web App (termina en <code style={{ color: T.bronzeLight }}>/exec</code>) para que este panel jale tus datos reales.
         </p>
       </Card>
       <Card style={{ marginBottom: 16 }}>
@@ -1381,6 +1559,16 @@ function ConexionTab({ config, setConfig, odsStatus, previsionStatus, probarCone
           <Btn icon={RefreshCw} onClick={() => probarConexion("prevision")}>Probar Conexión</Btn>
         </div>
         <StatusBadge status={previsionStatus} />
+      </Card>
+      <Card style={{ marginBottom: 16 }}>
+        <div style={{ color: T.textMuted }} className="text-xs uppercase tracking-wider mb-3">Tienda Virtual — Catálogo público (ataúdes/urnas/planes)</div>
+        <div className="flex flex-col md:flex-row gap-3 items-end mb-2">
+          <div className="flex-1 w-full">
+            <Input label="URL del Apps Script (Web App)" placeholder="https://script.google.com/macros/s/XXXX/exec" value={config.tiendaUrl} onChange={e => setConfig({ ...config, tiendaUrl: e.target.value })} />
+          </div>
+          <Btn icon={RefreshCw} onClick={() => probarTienda(config.tiendaUrl)}>Probar Conexión</Btn>
+        </div>
+        <StatusBadge status={tiendaStatus} />
       </Card>
       <Card>
         <div style={{ color: T.textMuted }} className="text-xs uppercase tracking-wider mb-2">Si ves un error al probar</div>
