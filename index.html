@@ -1224,8 +1224,9 @@ function GastosFijosTab({ gastosFijos, setGastosFijos, total }) {
 }
 
 const TIPOS_PRODUCTO = ["Ataúd", "Urna"];
-function ProveedoresTab({ productos, odsUrl, productosStatus, cargarProductos, guardarProductoRemoto, eliminarProductoRemoto, setProductos, proveedoresDir, setProveedoresDir }) {
-  const blank = { id: "", tipo: "Ataúd", nombre: "", descripcion: "", costo: "", precioSugerido: "", proveedor: "", existencia: "", disponibleInmediato: true, activo: true };
+const SEGMENTOS_TIENDA = { inmediato: "Servicio Inmediato", futuro: "Planes a Futuro", otros: "Otros Artículos" };
+function ProveedoresTab({ productos, tiendaUrl, productosStatus, cargarProductos, guardarProductoRemoto, eliminarProductoRemoto, setProductos, generarSkuProducto, toDirectImageUrl, proveedoresDir, setProveedoresDir }) {
+  const blank = { id: "", segment: "inmediato", categoria: "", nombre: "", descripcion: "", precio: "", imagen: "", costo: "", proveedor: "", existencia: "" };
   const [form, setForm] = useState(blank);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1252,25 +1253,28 @@ function ProveedoresTab({ productos, odsUrl, productosStatus, cargarProductos, g
 
   const startEdit = (p) => {
     setForm({
-      id: p.id, tipo: p.tipo || "Ataúd", nombre: p.nombre || "", descripcion: p.descripcion || "",
-      costo: p.costo || "", precioSugerido: p.precioSugerido || "", proveedor: p.proveedor || "",
-      existencia: p.existencia || "", disponibleInmediato: p.disponibleInmediato !== false, activo: p.activo !== false,
+      id: p.id, segment: p.segment || "inmediato", categoria: p.categoria || "", nombre: p.nombre || "",
+      descripcion: p.descripcion || "", precio: p.precio || "", imagen: p.imagen || "",
+      costo: p.costo || "", proveedor: p.proveedor || "", existencia: p.existencia || "",
     });
     setEditing(true);
   };
 
   const guardar = async () => {
-    if (!form.nombre || !form.costo) return;
+    if (!form.nombre || !form.precio) return;
     setSaving(true); setMsg(null);
-    const datos = { ...form, id: form.id || ("PROD-" + uid()), costo: Number(form.costo) || 0, precioSugerido: Number(form.precioSugerido) || 0, existencia: Number(form.existencia) || 0 };
+    const esNuevo = !editing;
+    const id = form.id || generarSkuProducto(form.segment, productos);
+    const datos = { ...form, id };
     try {
-      const res = await guardarProductoRemoto(datos);
+      const res = await guardarProductoRemoto(datos, esNuevo);
       if (!res || res.ok === false) throw new Error((res && res.mensaje) || "el servidor rechazó el guardado");
       setProductos(prev => {
-        const exists = prev.some(p => p.id === datos.id);
-        return exists ? prev.map(p => p.id === datos.id ? datos : p) : [...prev, datos];
+        const exists = prev.some(p => p.id === id);
+        const limpio = { ...datos, imagen: toDirectImageUrl(datos.imagen) };
+        return exists ? prev.map(p => p.id === id ? limpio : p) : [...prev, limpio];
       });
-      setMsg({ tone: "success", text: editing ? "Producto actualizado." : "Producto agregado al catálogo." });
+      setMsg({ tone: "success", text: editing ? "Producto actualizado en la Tienda Virtual." : "Producto agregado a la Tienda Virtual." });
       setForm(blank); setEditing(false);
     } catch (err) {
       setMsg({ tone: "danger", text: "No se guardó: " + err.message });
@@ -1289,53 +1293,58 @@ function ProveedoresTab({ productos, odsUrl, productosStatus, cargarProductos, g
   };
 
   const valorInventario = productos.reduce((s, p) => s + (Number(p.costo) || 0) * (Number(p.existencia) || 0), 0);
+  const previewUrl = toDirectImageUrl(form.imagen);
 
   return (
     <div>
-      <SectionTitle subtitle="Ataúdes y urnas disponibles" title="Proveedores" />
-      {!odsUrl && (
+      <SectionTitle subtitle="Catálogo de tu Tienda Virtual" title="Proveedores" />
+      {!tiendaUrl && (
         <Card style={{ marginBottom: 16, borderColor: T.bronze }}>
-          <p style={{ color: T.textMuted }} className="text-sm">Conecta primero la URL de ODS en la pestaña "Conexión de Apps" — este catálogo se guarda en la misma base que usa tu app de Órdenes, para que el inventario se vea ahí también.</p>
+          <p style={{ color: T.textMuted }} className="text-sm">Conecta primero la URL de la Tienda Virtual en la pestaña "Conexión de Apps" — lo que agregues aquí se guarda directo en tu catálogo público real.</p>
         </Card>
       )}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <KpiCard label="Productos" value={productos.length} icon={Package} />
-        <KpiCard label="Ataúdes" value={productos.filter(p => p.tipo === "Ataúd").length} icon={Package} />
-        <KpiCard label="Urnas" value={productos.filter(p => p.tipo === "Urna").length} icon={Package} />
-        <KpiCard label="Valor de inventario" value={fmtMoney(valorInventario)} icon={Wallet} />
+        <KpiCard label="Productos en tienda" value={productos.length} icon={Package} />
+        <KpiCard label="Servicio inmediato" value={productos.filter(p => p.segment === "inmediato").length} icon={Package} />
+        <KpiCard label="Planes a futuro" value={productos.filter(p => p.segment === "futuro").length} icon={Package} />
+        <KpiCard label="Valor de inventario (interno)" value={fmtMoney(valorInventario)} icon={Wallet} />
       </div>
 
       <Card style={{ marginBottom: 16 }}>
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <div style={{ color: T.textMuted }} className="text-xs uppercase tracking-wider">{editing ? "Editar producto" : "Agregar producto al catálogo"}</div>
+          <div style={{ color: T.textMuted }} className="text-xs uppercase tracking-wider">{editing ? "Editar producto" : "Agregar producto a la Tienda Virtual"}</div>
           <div className="flex items-center gap-2">
-            <Btn icon={RefreshCw} variant="ghost" onClick={() => cargarProductos()} disabled={!odsUrl}>Actualizar lista</Btn>
+            <Btn icon={RefreshCw} variant="ghost" onClick={() => cargarProductos()} disabled={!tiendaUrl}>Actualizar lista</Btn>
             <StatusBadge />
           </div>
         </div>
         <div className="grid md:grid-cols-3 gap-3 mb-3">
-          <Select label="Tipo" value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })}>
-            {TIPOS_PRODUCTO.map(t => <option key={t}>{t}</option>)}
+          <Select label="Dónde aparece" value={form.segment} onChange={e => setForm({ ...form, segment: e.target.value })}>
+            {Object.entries(SEGMENTOS_TIENDA).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </Select>
+          <Input label="Categoría (ej. Ataúd, Urna)" value={form.categoria} onChange={e => setForm({ ...form, categoria: e.target.value })} />
           <Input label="Nombre" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} />
-          <Input label="Proveedor" value={form.proveedor} onChange={e => setForm({ ...form, proveedor: e.target.value })} />
-          <Input label="Costo ($)" type="number" value={form.costo} onChange={e => setForm({ ...form, costo: e.target.value })} />
-          <Input label="Precio sugerido al cliente ($)" type="number" value={form.precioSugerido} onChange={e => setForm({ ...form, precioSugerido: e.target.value })} />
-          <Input label="Existencia (piezas)" type="number" value={form.existencia} onChange={e => setForm({ ...form, existencia: e.target.value })} />
+          <Input label="Precio al cliente ($)" type="number" value={form.precio} onChange={e => setForm({ ...form, precio: e.target.value })} />
           <Input label="Descripción" value={form.descripcion} onChange={e => setForm({ ...form, descripcion: e.target.value })} />
         </div>
-        <div className="flex flex-wrap items-center gap-4 mb-3">
-          <label className="flex items-center gap-2 text-sm" style={{ color: T.textMuted }}>
-            <input type="checkbox" checked={form.disponibleInmediato} onChange={e => setForm({ ...form, disponibleInmediato: e.target.checked })} />
-            Disponible para servicios de uso inmediato (ODS)
-          </label>
-          <label className="flex items-center gap-2 text-sm" style={{ color: T.textMuted }}>
-            <input type="checkbox" checked={form.activo} onChange={e => setForm({ ...form, activo: e.target.checked })} />
-            Activo
-          </label>
+        <div className="grid md:grid-cols-3 gap-3 mb-3 items-start">
+          <div className="md:col-span-2">
+            <Input label="Imagen (link de Google Drive u otra fuente)" placeholder="https://drive.google.com/file/d/.../view?usp=sharing" value={form.imagen} onChange={e => setForm({ ...form, imagen: e.target.value })} />
+            <p style={{ color: T.textMuted }} className="text-xs mt-1">En Drive: Compartir → "Cualquier persona con el enlace". Se convierte automáticamente al formato correcto.</p>
+          </div>
+          {previewUrl && (
+            <img src={previewUrl} alt="Vista previa" style={{ width: "100%", maxHeight: 110, objectFit: "cover", borderRadius: 8, border: `1px solid ${T.border}` }}
+              onError={e => { e.currentTarget.style.display = "none"; }} />
+          )}
+        </div>
+        <div style={{ color: T.textMuted, borderTop: `1px solid ${T.border}` }} className="text-xs uppercase tracking-wider mb-3 pt-3">Datos internos (solo visibles aquí en el panel, no en la tienda pública)</div>
+        <div className="grid md:grid-cols-3 gap-3 mb-3">
+          <Input label="Costo interno ($)" type="number" value={form.costo} onChange={e => setForm({ ...form, costo: e.target.value })} />
+          <Input label="Proveedor" value={form.proveedor} onChange={e => setForm({ ...form, proveedor: e.target.value })} />
+          <Input label="Existencia (piezas)" type="number" value={form.existencia} onChange={e => setForm({ ...form, existencia: e.target.value })} />
         </div>
         <div className="flex items-center gap-3">
-          <Btn icon={editing ? CheckCircle2 : Plus} onClick={guardar} disabled={saving || !odsUrl}>{saving ? "Guardando…" : editing ? "Guardar cambios" : "Agregar Producto"}</Btn>
+          <Btn icon={editing ? CheckCircle2 : Plus} onClick={guardar} disabled={saving || !tiendaUrl}>{saving ? "Guardando…" : editing ? "Guardar cambios" : "Agregar a la Tienda"}</Btn>
           {editing && <Btn variant="ghost" onClick={() => { setForm(blank); setEditing(false); }}>Cancelar</Btn>}
         </div>
         {msg && <p style={{ color: msg.tone === "success" ? T.success : T.danger }} className="text-sm mt-2">{msg.text}</p>}
@@ -1345,12 +1354,14 @@ function ProveedoresTab({ productos, odsUrl, productosStatus, cargarProductos, g
         {productos.length === 0 ? (
           <p style={{ color: T.textMuted }} className="text-sm text-center py-6">Aún no hay productos en el catálogo.</p>
         ) : (
-          <Table headers={["Tipo", "Nombre", "Proveedor", "Costo", "Precio sugerido", "Existencia", "Inmediato", ""]}>
+          <Table headers={["Imagen", "Segmento", "Nombre", "Precio", "Costo interno", "Existencia", ""]}>
             {productos.map(p => (
               <tr key={p.id}>
-                <Td muted>{p.tipo}</Td><Td>{p.nombre}</Td><Td muted>{p.proveedor}</Td>
-                <Td>{fmtMoney(p.costo)}</Td><Td>{fmtMoney(p.precioSugerido)}</Td><Td muted>{p.existencia}</Td>
-                <Td><Pill tone={p.disponibleInmediato !== false ? "success" : "info"}>{p.disponibleInmediato !== false ? "Sí" : "No"}</Pill></Td>
+                <Td>
+                  {p.imagen ? <img src={p.imagen} alt={p.nombre} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 6 }} onError={e => { e.currentTarget.style.display = "none"; }} /> : "—"}
+                </Td>
+                <Td muted>{SEGMENTOS_TIENDA[p.segment] || p.segment}</Td><Td>{p.nombre}</Td>
+                <Td>{fmtMoney(p.precio)}</Td><Td muted>{p.costo ? fmtMoney(p.costo) : "—"}</Td><Td muted>{p.existencia || "—"}</Td>
                 <Td>
                   <div className="flex items-center gap-2">
                     <button onClick={() => startEdit(p)} style={{ color: T.bronze }}><Edit3 size={14} /></button>
@@ -1365,7 +1376,7 @@ function ProveedoresTab({ productos, odsUrl, productosStatus, cargarProductos, g
 
       <Card style={{ marginTop: 16, marginBottom: 16 }}>
         <p style={{ color: T.textMuted }} className="text-sm">
-          Nota: para que estos productos aparezcan como opción seleccionable directamente dentro de tu app de Órdenes (ODS) al capturar un servicio, esa app necesita leer este mismo catálogo (acción <code style={{ color: T.bronzeLight }}>obtenerProductos</code>). Si me compartes el código de esa app, agrego ahí el selector.
+          Esto agrega/edita productos directamente en tu Tienda Virtual real — se ven igual ahí y, si tu app de Servicios Inmediatos usara esta misma URL, también ahí.
         </p>
       </Card>
 
