@@ -8,6 +8,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Panel Huerta" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/favicon-64.png" sizes="64x64" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
 <title>Panel de Control - Funeraria Huerta</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1646,6 +1649,13 @@ function ConexionTab({ config, setConfig, odsStatus, previsionStatus, probarCone
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(<Dashboard />);
+</script>
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").catch(function () {});
+    });
+  }
 </script>
 </body>
 </html>
