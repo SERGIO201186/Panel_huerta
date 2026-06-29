@@ -277,6 +277,32 @@ const NAV = [
   { id: "conexion", label: "Conexión de Apps", icon: Link2 },
 ];
 
+function Lightbox({ src, onClose }) {
+  if (!src) return null;
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: "fixed", inset: 0, background: "rgba(5,8,14,0.92)", zIndex: 100 }}
+      className="flex items-center justify-center p-4 md:p-10"
+    >
+      <button
+        onClick={onClose}
+        style={{ position: "absolute", top: 16, right: 16, color: T.bronzeLight, background: T.surfaceAlt, border: `1px solid ${T.border}` }}
+        className="rounded-full p-2"
+        aria-label="Cerrar"
+      >
+        <X size={20} />
+      </button>
+      <img
+        src={src}
+        alt="Vista ampliada"
+        onClick={e => e.stopPropagation()}
+        style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 8, boxShadow: "0 10px 40px rgba(0,0,0,0.6)" }}
+      />
+    </div>
+  );
+}
+
 function SealLogo({ size = 32 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" fill="none">
@@ -290,6 +316,7 @@ function SealLogo({ size = 32 }) {
 
 function Dashboard() {
   const [tab, setTab] = useState("resumen");
+  const [lightboxImg, setLightboxImg] = useState(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
@@ -425,6 +452,14 @@ function Dashboard() {
     delete internos[id];
     await saveKey("productos-internos", internos);
     return { ok: true };
+  }
+
+  async function cambiarEstadoProductoRemoto(id, nuevoEstado) {
+    if (!config.tiendaUrl) throw new Error("No hay URL de Tienda Virtual conectada");
+    const accion = nuevoEstado === "reservado" ? "reservar" : "liberar";
+    const res = await fetch(config.tiendaUrl, { method: "POST", body: JSON.stringify({ action: accion, id }) });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return res.json();
   }
 
   async function importarColaboradores(urlOverride) {
@@ -634,7 +669,7 @@ function Dashboard() {
         </button>
       </div>
       {mobileNavOpen && (
-        <div className="md:hidden flex flex-col" style={{ borderBottom: `1px solid ${T.border}` }}>
+        <div className="md:hidden flex flex-col overflow-y-auto" style={{ borderBottom: `1px solid ${T.border}`, maxHeight: "75vh" }}>
           {NAV.map(n => (
             <button key={n.id} onClick={() => { setTab(n.id); setMobileNavOpen(false); }}
               style={{ color: tab === n.id ? T.bronze : T.textMuted, borderTop: `1px solid ${T.border}` }}
@@ -676,11 +711,12 @@ function Dashboard() {
           {tab === "hormiga" && <HormigaTab gastos={gastos} setGastos={setGastos} total={totalGastosHormiga} />}
           {tab === "vehiculos" && <VehiculosTab vehiculos={vehiculos} setVehiculos={setVehiculos} total={totalVehiculos} />}
           {tab === "fijos" && <GastosFijosTab gastosFijos={gastosFijos} setGastosFijos={setGastosFijos} total={totalGastosFijos} />}
-          {tab === "proveedores" && <ProveedoresTab productos={productos} tiendaUrl={config.tiendaUrl} productosStatus={productosStatus} cargarProductos={cargarProductos} guardarProductoRemoto={guardarProductoRemoto} eliminarProductoRemoto={eliminarProductoRemoto} setProductos={setProductos} generarSkuProducto={generarSkuProducto_} toDirectImageUrl={toDirectImageUrl_} proveedoresDir={proveedoresDir} setProveedoresDir={setProveedoresDir} />}
+          {tab === "proveedores" && <ProveedoresTab productos={productos} tiendaUrl={config.tiendaUrl} productosStatus={productosStatus} cargarProductos={cargarProductos} guardarProductoRemoto={guardarProductoRemoto} eliminarProductoRemoto={eliminarProductoRemoto} cambiarEstadoProductoRemoto={cambiarEstadoProductoRemoto} setProductos={setProductos} generarSkuProducto={generarSkuProducto_} toDirectImageUrl={toDirectImageUrl_} proveedoresDir={proveedoresDir} setProveedoresDir={setProveedoresDir} onImageClick={setLightboxImg} />}
           {tab === "rentabilidad" && <RentabilidadTab odsData={odsData} isDemoOds={isDemoOds} gastosFijosMes={gastosOperativosMes} />}
           {tab === "conexion" && <ConexionTab config={config} setConfig={setConfig} odsStatus={odsStatus} previsionStatus={previsionStatus} probarConexion={probarConexion} cloudUrl={cloudUrl} cloudStatus={cloudStatus} probarNube={probarNube} tiendaStatus={tiendaStatus} probarTienda={probarTienda} />}
         </main>
       </div>
+      <Lightbox src={lightboxImg} onClose={() => setLightboxImg(null)} />
     </div>
   );
 }
@@ -1225,7 +1261,7 @@ function GastosFijosTab({ gastosFijos, setGastosFijos, total }) {
 
 const TIPOS_PRODUCTO = ["Ataúd", "Urna"];
 const SEGMENTOS_TIENDA = { inmediato: "Servicio Inmediato", futuro: "Planes a Futuro", otros: "Otros Artículos" };
-function ProveedoresTab({ productos, tiendaUrl, productosStatus, cargarProductos, guardarProductoRemoto, eliminarProductoRemoto, setProductos, generarSkuProducto, toDirectImageUrl, proveedoresDir, setProveedoresDir }) {
+function ProveedoresTab({ productos, tiendaUrl, productosStatus, cargarProductos, guardarProductoRemoto, eliminarProductoRemoto, cambiarEstadoProductoRemoto, setProductos, generarSkuProducto, toDirectImageUrl, proveedoresDir, setProveedoresDir, onImageClick }) {
   const blank = { id: "", segment: "inmediato", categoria: "", nombre: "", descripcion: "", precio: "", imagen: "", costo: "", proveedor: "", existencia: "" };
   const [form, setForm] = useState(blank);
   const [editing, setEditing] = useState(false);
@@ -1292,6 +1328,16 @@ function ProveedoresTab({ productos, tiendaUrl, productosStatus, cargarProductos
     }
   };
 
+  const toggleEstado = async (p) => {
+    const nuevoEstado = (p.estado || "disponible") === "disponible" ? "reservado" : "disponible";
+    try {
+      await cambiarEstadoProductoRemoto(p.id, nuevoEstado);
+      setProductos(prev => prev.map(x => x.id === p.id ? { ...x, estado: nuevoEstado } : x));
+    } catch (err) {
+      setMsg({ tone: "danger", text: "No se pudo cambiar el estado: " + err.message });
+    }
+  };
+
   const valorInventario = productos.reduce((s, p) => s + (Number(p.costo) || 0) * (Number(p.existencia) || 0), 0);
   const previewUrl = toDirectImageUrl(form.imagen);
 
@@ -1333,7 +1379,8 @@ function ProveedoresTab({ productos, tiendaUrl, productosStatus, cargarProductos
             <p style={{ color: T.textMuted }} className="text-xs mt-1">En Drive: Compartir → "Cualquier persona con el enlace". Se convierte automáticamente al formato correcto.</p>
           </div>
           {previewUrl && (
-            <img src={previewUrl} alt="Vista previa" style={{ width: "100%", maxHeight: 110, objectFit: "cover", borderRadius: 8, border: `1px solid ${T.border}` }}
+            <img src={previewUrl} alt="Vista previa" style={{ width: "100%", maxHeight: 110, objectFit: "cover", borderRadius: 8, border: `1px solid ${T.border}`, cursor: "zoom-in" }}
+              onClick={() => onImageClick(previewUrl)}
               onError={e => { e.currentTarget.style.display = "none"; }} />
           )}
         </div>
@@ -1354,14 +1401,19 @@ function ProveedoresTab({ productos, tiendaUrl, productosStatus, cargarProductos
         {productos.length === 0 ? (
           <p style={{ color: T.textMuted }} className="text-sm text-center py-6">Aún no hay productos en el catálogo.</p>
         ) : (
-          <Table headers={["Imagen", "Segmento", "Nombre", "Precio", "Costo interno", "Existencia", ""]}>
+          <Table headers={["Imagen", "Segmento", "Nombre", "Precio", "Costo interno", "Existencia", "Estado", ""]}>
             {productos.map(p => (
               <tr key={p.id}>
                 <Td>
-                  {p.imagen ? <img src={p.imagen} alt={p.nombre} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 6 }} onError={e => { e.currentTarget.style.display = "none"; }} /> : "—"}
+                  {p.imagen ? <img src={p.imagen} alt={p.nombre} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 6, cursor: "zoom-in" }} onClick={() => onImageClick(p.imagen)} onError={e => { e.currentTarget.style.display = "none"; }} /> : "—"}
                 </Td>
                 <Td muted>{SEGMENTOS_TIENDA[p.segment] || p.segment}</Td><Td>{p.nombre}</Td>
                 <Td>{fmtMoney(p.precio)}</Td><Td muted>{p.costo ? fmtMoney(p.costo) : "—"}</Td><Td muted>{p.existencia || "—"}</Td>
+                <Td>
+                  <button onClick={() => toggleEstado(p)}>
+                    <Pill tone={(p.estado || "disponible") === "disponible" ? "success" : "danger"}>{(p.estado || "disponible") === "disponible" ? "Disponible" : "Reservado"}</Pill>
+                  </button>
+                </Td>
                 <Td>
                   <div className="flex items-center gap-2">
                     <button onClick={() => startEdit(p)} style={{ color: T.bronze }}><Edit3 size={14} /></button>
